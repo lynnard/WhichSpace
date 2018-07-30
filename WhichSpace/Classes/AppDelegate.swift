@@ -11,17 +11,16 @@ import Sparkle
 
 @NSApplicationMain
 @objc
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SUUpdaterDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, SUUpdaterDelegate {
 
     @IBOutlet weak var window: NSWindow!
-    @IBOutlet weak var statusMenu: NSMenu!
     @IBOutlet weak var application: NSApplication!
     @IBOutlet weak var workspace: NSWorkspace!
     @IBOutlet weak var updater: SUUpdater!
 
     let spacesMonitorFile = "~/Library/Preferences/com.apple.spaces.plist"
 
-    let statusBarItem = NSStatusBar.system().statusItem(withLength: 27)
+    let statusBarItem = NSStatusBar.system().statusItem(withLength: -1)
     let conn = _CGSDefaultConnection()
 
     static var darkModeEnabled = false
@@ -51,16 +50,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SUUpdaterDel
 
     fileprivate func configureMenuBarIcon() {
         updateDarkModeStatus()
-        statusBarItem.button?.cell = StatusItemCell()
-        statusBarItem.image = NSImage(named: "default") // This icon appears when switching spaces when cell length is variable width.
-        statusBarItem.menu = statusMenu
-    }
-
-    fileprivate func configureSparkle() {
-        updater = SUUpdater.shared()
-        updater.delegate = self
-        // Silently check for updates on launch
-        updater.checkForUpdatesInBackground()
     }
 
     fileprivate func configureSpaceMonitor() {
@@ -104,43 +93,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, SUUpdaterDel
         configureApplication()
         configureObservers()
         configureMenuBarIcon()
-        configureSparkle()
         configureSpaceMonitor()
         updateActiveSpaceNumber()
     }
 
     func updateActiveSpaceNumber() {
         let info = CGSCopyManagedDisplaySpaces(conn) as! [NSDictionary]
-        let displayInfo = info[0]
-        let activeSpaceID = (displayInfo["Current Space"]! as! NSDictionary)["ManagedSpaceID"] as! Int
-        let spaces = displayInfo["Spaces"] as! NSArray
-        for (index, space) in spaces.enumerated() {
-            let spaceID = (space as! NSDictionary)["ManagedSpaceID"] as! Int
-            let spaceNumber = index + 1
-            if spaceID == activeSpaceID {
-                statusBarItem.button?.title = String("\(spaceNumber)")
-                return
+        var spaceNumbers: [String] = []
+        infoLoop: for displayInfo in info {
+            let activeSpaceID = (displayInfo["Current Space"]! as! NSDictionary)["ManagedSpaceID"] as! Int
+            let spaces = displayInfo["Spaces"] as! NSArray
+            for (index, space) in spaces.enumerated() {
+                let spaceID = (space as! NSDictionary)["ManagedSpaceID"] as! Int
+                let spaceNumber = index + 1
+                if spaceID == activeSpaceID {
+                    spaceNumbers.append(String(spaceNumber))
+                    continue infoLoop
+                }
             }
+            spaceNumbers.append("?")
         }
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        if let cell = statusBarItem.button?.cell as! StatusItemCell? {
-            cell.isMenuVisible = true
-        }
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        if let cell = statusBarItem.button?.cell as! StatusItemCell? {
-            cell.isMenuVisible = false
-        }
-    }
-
-    @IBAction func checkForUpdatesClicked(_ sender: NSMenuItem) {
-        updater.checkForUpdates(sender)
-    }
-
-    @IBAction func quitClicked(_ sender: NSMenuItem) {
-        NSApplication.shared().terminate(self)
+        let title = spaceNumbers.joined(separator: " | ")
+        let attrs = [ NSFontAttributeName: NSFont(name: "Source Code Pro", size: 12.0)! ]
+        statusBarItem.attributedTitle = NSAttributedString(string: title, attributes: attrs)
     }
 }
